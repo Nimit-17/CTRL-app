@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1,user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="CTRL"/>
+<meta name="theme-color" content="#05070A"/>
+<meta name="description" content="CTRL — self-improvement OS with AXIS, your scheduling co-pilot"/>
+<title>CTRL</title>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="/icons/icon-180.png"/>
+<link rel="icon" type="image/png" href="/icons/icon-192.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/css/tokens.css"/>
+<link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+<div id="app">
+  <div id="boot-sweep"></div>
+  <div id="screen-wrap" class="screen"></div>
+  <div id="axis-screen" style="display:none"></div>
+  <div id="tabbar"></div>
+  <div id="overlay"></div>
+  <div id="sheet-wrap"><div id="sheet-scrim"></div><div id="sheet"></div></div>
+</div>
+<script src="/js/api.js"></script>
+<script src="/js/app.js"></script>
+<script src="/js/axis.js"></script>
+</body>
+</html>

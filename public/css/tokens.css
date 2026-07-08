@@ -1,0 +1,58 @@
+/* CTRL — command-deck HUD design tokens */
+:root{
+  /* surfaces */
+  --bg:#05070A;
+  --s1:#0B0F14;
+  --s2:#111823;
+  --s3:#16202E;
+  --border:#1C2733;
+  --border-hi:#2A3B4D;
+
+  /* instrumentation */
+  --primary:#38E1FF;          /* holographic cyan */
+  --primary-2:#4C7DFF;        /* electric blue */
+  --primary-dim:rgba(56,225,255,.14);
+  --primary-glow:0 0 24px rgba(56,225,255,.25);
+  --accent:#F5A623;           /* warm amber — continuity */
+  --accent-dim:rgba(245,166,35,.14);
+
+  /* text */
+  --text:#E8F0F5;
+  --sub:#7C8C9A;
+  --dim:#34414F;
+
+  /* semantics */
+  --ok:#34D399;
+  --warn:#F5A623;
+  --danger:#F87171;
+
+  /* arc palette (continuity with old app) */
+  --arc-orange:#F5A623;
+  --arc-green:#34D399;
+  --arc-purple:#818CF8;
+  --arc-blue:#38BDF8;
+  --arc-red:#F87171;
+  --arc-pink:#F472B6;
+
+  /* type — Space Grotesk for display (geometric but soft), Inter for UI, JetBrains Mono for data */
+  --f-display:'Space Grotesk','Inter',system-ui,sans-serif;
+  --f-body:'Inter',system-ui,-apple-system,sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,monospace;
+
+  /* type scale */
+  --fs-hero:30px;
+  --fs-h1:23px;
+  --fs-h2:17px;
+  --fs-body:14px;
+  --fs-sm:12.5px;
+  --fs-xs:11px;
+
+  /* layout */
+  --radius:14px;
+  --radius-sm:9px;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bot:env(safe-area-inset-bottom,0px);
+
+  /* glass */
+  --glass:rgba(17,24,35,.72);
+}
