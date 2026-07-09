@@ -392,6 +392,18 @@ const AXIS = {
     if (action.type === 'disruption' && action.items?.length) this.renderDisruption(action);
     else if (action.type === 'plan_week' || action.type === 'plan_today') this.renderPlanAction(action.type);
     else if (action.type === 'add_task' && action.text) this.renderAddTask(action.text);
+    else if (action.type === 'task_added' && action.task) {
+      // server already created (and maybe scheduled) it — sync local state, no confirm needed
+      if (!C.tasks.some(t => t.id === action.task.id)) C.tasks.push(action.task);
+      cacheState();
+      const t = action.task;
+      const meta = t.kind === 'oneoff'
+        ? `One-off · ${(t.dates || []).join(', ')}` : `Recurring · ${(t.days || []).length === 7 ? 'daily' : (t.days || []).map(d => DF[d]).join(' ')}`;
+      this.addBubble(`<div class="action-card"><div class="ac-title">Task added</div>
+        <div class="ac-kv"><span class="k">${esc(t.name)}</span><span class="v">${t.type === 'count' ? `${t.target} ${esc(t.unit)}` : fmtM(t.minutes)}</span></div>
+        <div class="ac-kv"><span class="k">${meta}</span><span class="v">${action.placed ? `${DF[new Date(action.placed.date + 'T12:00:00').getDay()]} ${fmtT(action.placed.start)}` : 'not scheduled yet'}</span></div></div>`);
+      if (action.placed) PLAN.load(true);
+    }
     else if (action.type === 'move_applied') {
       const sameDay = action.to.date === action.from.date;
       const to = `${sameDay ? '' : DF[new Date(action.to.date + 'T12:00:00').getDay()] + ' '}${fmtT(action.to.start)}–${fmtT(action.to.end)}`;
@@ -403,8 +415,12 @@ const AXIS = {
       /* reply text already explains it — nothing extra to render */
     }
     else if (action.type === 'update_pref') {
+      const v = action.key === 'day_window' ? fmtWin(action.value)
+        : action.key === 'rules' ? action.value
+        : fmtT(action.value);
       this.addBubble(`<div class="action-card"><div class="ac-title">Preference updated</div>
-        <div class="ac-kv"><span class="k">${esc(action.key.replace(/_/g, ' '))}</span><span class="v">${esc(action.key === 'day_window' ? fmtWin(action.value) : fmtT(action.value))}</span></div></div>`);
+        <div class="ac-kv"><span class="k">${esc(action.key.replace(/_/g, ' '))}</span><span class="v" style="white-space:pre-wrap;text-align:right">${esc(v)}</span></div></div>`);
+      api('/prefs').then(p => { C.prefs = p.prefs; cacheState(); }).catch(() => {});
     }
   },
 

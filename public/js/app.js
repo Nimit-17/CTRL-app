@@ -770,6 +770,10 @@ function renderSettingsSec() {
       </div>
       <p class="xs dim" style="margin-top:6px">Morning / evening · restart server to apply new times</p>
     </div>
+    <div class="field" style="margin-bottom:18px">
+      <span class="xs sub" style="display:block;margin-bottom:8px">Rules for AXIS (soft preferences — it reads these every chat)</span>
+      <textarea id="pref-rules" rows="3" placeholder="e.g. Office 11:30am–8pm on weekdays — schedule work tasks there.&#10;No deep work after 10pm." style="width:100%;border:1px solid var(--border);border-radius:9px;padding:10px;font-size:14px;line-height:1.5">${esc(C.prefs.rules || '')}</textarea>
+    </div>
     <button id="prefs-save" class="btn btn-ghost cyan">Save preferences</button>
   </div>
 
@@ -878,6 +882,7 @@ function bindMore() {
         day_window: dw,
         briefing_morning: document.getElementById('bf-m').value.trim(),
         briefing_evening: document.getElementById('bf-e').value.trim(),
+        rules: document.getElementById('pref-rules').value.trim(),
       });
       C.prefs = r.prefs; cacheState(); toast('Preferences saved ✓');
     } catch { toast('⚠ offline'); }

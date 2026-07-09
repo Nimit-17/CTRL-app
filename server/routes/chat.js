@@ -11,11 +11,13 @@
 const express = require('express');
 const { q, todayStr, todayDow, weekDates, dowOf } = require('../db');
 const { completeJson } = require('../brain');
-const { proposeSlot, fmt12 } = require('../scheduler');
+const { proposeSlot, planWeek, fmt12 } = require('../scheduler');
+const { classifyTask, normWindow, resolveDateFromText } = require('../classify');
 
 const router = express.Router();
 const DF = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DFS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const fmtDur = m => m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}` : m + 'm';
 
 router.get('/', (_req, res) => {
   res.json({ messages: q.recentMessages(80) });
@@ -59,7 +61,7 @@ function buildContext() {
 const SYSTEM_TEMPLATE = (ctx, profile) => `You are AXIS — the owner's personal scheduling co-pilot inside his CTRL app. Calm, sharp, direct; a competent chief-of-staff, not a cheerleader. Keep replies SHORT (1-3 sentences). No markdown, no bullet lists. Use 12-hour times with am/pm (e.g. "8:15pm"), never 24-hour.
 
 TODAY: ${DF[todayDow()]}, ${ctx.today} (Asia/Kolkata). Owner: ${profile?.name || 'the owner'}.
-DAY WINDOW (awake hours): ${ctx.prefs.day_window}.
+DAY WINDOW (awake hours): ${ctx.prefs.day_window}.${ctx.prefs.rules ? `\nOWNER RULES (soft preferences — respect them when advising/scheduling):\n${ctx.prefs.rules}` : ''}
 FIXED BLOCKS (immovable):
 ${ctx.blocksTxt}
 TODAY'S SCHEDULE (source of truth — read times from here, never guess):
@@ -81,16 +83,19 @@ Return ONLY a JSON object:
    "scope": "today" | "week",      // "today" = later the same day only; "week" = allow another day
    "not_before": "HH:MM" | null    // 24h floor if the owner is busy until a time ("in office till 8" -> "20:00")
  } | {
-   "type": "update_pref",          // lasting preference change (sleep schedule / day window / briefing times)
-   "key": "day_window" | "briefing_morning" | "briefing_evening",
-   "value": string                 // day_window as "HH:MM-HH:MM" 24h (midnight = 24:00); times as "HH:MM"
+   "type": "update_pref",          // lasting preference change (sleep schedule / day window / briefing times / a standing rule)
+   "key": "day_window" | "briefing_morning" | "briefing_evening" | "rules",
+   "value": string                 // day_window as "HH:MM-HH:MM" 24h (midnight = 24:00); times as "HH:MM"; rules = the FULL updated rules text (existing rules plus the new one, one per line)
  } | {
    "type": "plan_week"
  } | {
    "type": "plan_today"
  } | {
-   "type": "add_task",
-   "text": string                  // the task description verbatim, for the classifier
+   "type": "add_task",               // owner wants a new task created
+   "text": string,                   // the task described in plain words, for the classifier
+   "minutes": int | null,            // duration if the owner stated one ("an hour"=60, "half an hour"=30)
+   "preferred_window": "HH:MM-HH:MM" | "morning" | "afternoon" | "evening" | null,  // if they said WHEN ("first thing at 11:30", "after lunch")
+   "schedule_now": boolean           // true if they've asked you to schedule/add it to the plan now
  }
 }
 
@@ -98,7 +103,9 @@ Rules:
 - If the owner names ONE item and says to move/push/reschedule it (or answers "today"/"tomorrow"/"later" to your reschedule question), use move_item with the right item_id. Recurring items like gym can only move LATER THE SAME DAY or to a day they don't already run — never twice on one day; use scope accordingly ("today" for a same-day push).
 - If the owner says something vague like "I'm 2 hours behind" affecting several items, use disruption.
 - "In office till 8", "stuck till 6" etc. is a not_before constraint on the affected item(s).
+- New task: emit add_task. Carry the stated duration in "minutes" and any stated time in "preferred_window". Set schedule_now=true once they've said to add/schedule it. IMPORTANT: do NOT claim a task is added or scheduled, and do NOT state its time or duration, unless you emit add_task in THIS turn — the app creates it and reports the real details.
 - Sleep-schedule changes → update_pref with the new day_window.
+- Standing soft preferences ("keep office hours for work tasks", "no deep work after 9pm") → update_pref key "rules" with the full updated rules text. These are guidance, not fixed blocks.
 - Never claim a specific new time yourself; the app confirms it. If nothing is actionable, action is null.`;
 
 /* Apply a move_item: returns { applied, name, from, to } or { applied:false, name, reason } */
@@ -173,13 +180,59 @@ router.post('/', async (req, res) => {
       enriched = { type: 'move_failed', name: res2.name };
     }
   } else if (action?.type === 'update_pref') {
-    const ALLOWED = ['day_window', 'briefing_morning', 'briefing_evening'];
-    if (ALLOWED.includes(action.key) && typeof action.value === 'string' && action.value.length < 20) {
+    const ALLOWED = ['day_window', 'briefing_morning', 'briefing_evening', 'rules'];
+    const maxLen = action.key === 'rules' ? 1000 : 20;
+    if (ALLOWED.includes(action.key) && typeof action.value === 'string' && action.value.length < maxLen) {
       q.setPref(action.key, action.value);
       enriched = { type: 'update_pref', key: action.key, value: action.value, applied: true };
       console.log(`[chat] pref updated by AXIS: ${action.key}=${action.value}`);
     }
-  } else if (action?.type === 'plan_week' || action?.type === 'plan_today' || action?.type === 'add_task') {
+  } else if (action?.type === 'add_task' && action.text) {
+    const c = await classifyTask(action.text);
+    if (!c) {
+      reply = `${reply}\n\nI couldn't parse that into a task just now — add it from the Tasks tab and I'll schedule it.`;
+    } else {
+      // dedupe: if a same-name task already exists, DON'T re-parse over it (a confirm
+      // turn like "schedule it then" would otherwise degrade the good task). Reuse it
+      // as-is and only apply explicit spoken overrides.
+      const existing = q.allTasks().find(x => x.name.toLowerCase() === c.classified.name.toLowerCase() && x.kind === c.classified.kind);
+      let t, id, isNew;
+      if (existing) {
+        t = { ...existing }; id = existing.id; isNew = false;
+      } else {
+        t = c.classified; id = 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); isNew = true;
+      }
+      if (action.minutes) t.minutes = Math.max(5, Math.min(480, +action.minutes));
+      const win = normWindow(action.preferred_window);
+      if (win) t.preferred_window = win;
+      // correct the date from the owner's actual words (their message reliably contains
+      // "tomorrow"/weekday even when the LLM's task paraphrase dropped it)
+      if (isNew && t.kind === 'oneoff') {
+        const rd = resolveDateFromText(text);
+        if (rd) t.dates = [rd];
+      }
+      if (isNew) q.insertTask({ ...t, id }); else q.updateTask(id, { minutes: t.minutes, preferred_window: t.preferred_window });
+
+      let placedMsg = '', placed = null;
+      if (action.schedule_now) {
+        planWeek(); // regenerates the week's plan, now including this task
+        const week = weekDates();
+        const rows = q.scheduleRange(week[0], week[6]).filter(rr => rr.task_id === id && rr.status !== 'moved' && rr.status !== 'dropped');
+        if (rows.length) {
+          const first = rows[0];
+          const when = first.date === todayStr() ? `${fmt12(first.start)} today` : `${DFS[dowOf(first.date)]} at ${fmt12(first.start)}`;
+          placedMsg = ` for ${when}`;
+          placed = { date: first.date, start: first.start, end: first.end };
+        } else {
+          placedMsg = ` — but I couldn't fit it, try "plan my week" or free up a slot`;
+        }
+      }
+      const verb = isNew ? 'Added' : 'Scheduled';
+      reply = `${reply}\n\n✓ ${verb} "${t.name}" (${t.type === 'count' ? `${t.target} ${t.unit}` : fmtDur(t.minutes)})${placedMsg}.`;
+      enriched = { type: 'task_added', task: q.getTask(id), placed };
+      console.log(`[chat] ${isNew ? 'added' : 'reused'} task "${t.name}" ${t.minutes}min schedule_now=${!!action.schedule_now}`);
+    }
+  } else if (action?.type === 'plan_week' || action?.type === 'plan_today') {
     enriched = action;
   }
 
