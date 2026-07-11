@@ -17,7 +17,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 
 /* ── shell ── */
 #app{height:100dvh;display:flex;flex-direction:column;width:100%;max-width:430px;margin:0 auto;position:relative;overflow:hidden}
-.screen{flex:1;overflow-y:auto;overflow-x:hidden;padding:calc(var(--safe-top) + 14px) 16px 24px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.screen{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:calc(var(--safe-top) + 14px) 16px 24px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .screen::-webkit-scrollbar{display:none}
 
 /* ambient grid — barely-there HUD texture */
@@ -180,14 +180,12 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .wk-nowline{position:absolute;left:0;right:0;height:1.5px;background:var(--accent);z-index:3}
 
 /* ── AXIS chat ── */
-/* flex:1 + min-height:0 (NOT height:100%) so a long chat can never push the tab bar
-   off-screen — the message list scrolls internally instead */
-#axis-screen{display:flex;flex-direction:column;flex:1 1 0;min-height:0;padding:0}
-.axis-head{padding:calc(var(--safe-top) + 12px) 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:rgba(5,7,10,.8)}
+#axis-screen{display:flex;flex:1;min-height:0;overflow:hidden;flex-direction:column;height:auto;padding:0}
+.axis-head{flex-shrink:0;padding:calc(var(--safe-top) + 10px) 16px 9px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:rgba(5,7,10,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 .axis-orb-lg{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--primary);display:flex;align-items:center;justify-content:center;position:relative;animation:glowPulse 3s infinite;flex-shrink:0}
 .axis-orb-lg::before{content:'';width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,var(--primary),var(--primary-2))}
 .axis-orb-lg::after{content:'';position:absolute;inset:4px;border-radius:50%;border:1px dashed rgba(56,225,255,.35)}
-.axis-msgs{flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.axis-msgs{flex:1;min-height:0;overflow-y:auto;padding:14px 16px 12px;display:flex;flex-direction:column;gap:12px;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .axis-msgs::-webkit-scrollbar{display:none}
 .msg{max-width:86%;padding:11px 14px;border-radius:16px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
 .msg.user{align-self:flex-end;background:linear-gradient(135deg,rgba(56,225,255,.16),rgba(76,125,255,.16));border:1px solid rgba(56,225,255,.3);border-bottom-right-radius:5px}
@@ -195,12 +193,12 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;heigh
 .msg.assistant.briefing{border-left:3px solid var(--accent)}
 .msg .msg-tag{font-family:var(--f-body);font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:5px}
 .msg-caret{display:inline-block;width:7px;height:14px;background:var(--primary);vertical-align:text-bottom;animation:blink .8s infinite;margin-left:2px}
-.axis-quick{display:flex;gap:8px;overflow-x:auto;padding:8px 16px;scrollbar-width:none}
+.axis-quick{display:flex;gap:8px;overflow-x:auto;padding:8px 16px;scrollbar-width:none;flex-shrink:0;border-top:1px solid rgba(28,39,51,.45);background:rgba(5,7,10,.72)}
 .axis-quick::-webkit-scrollbar{display:none}
-.axis-inputbar{display:flex;gap:10px;align-items:flex-end;padding:10px 16px 12px;border-top:1px solid var(--border);background:rgba(7,10,14,.9)}
-.axis-input{flex:1;background:var(--s1);border:1px solid var(--border);border-radius:22px;padding:11px 16px;font-size:16px;max-height:110px;line-height:1.4;transition:border-color .2s}
+.axis-inputbar{display:flex;gap:10px;align-items:flex-end;padding:9px 16px 10px;border-top:1px solid var(--border);background:rgba(7,10,14,.94);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);flex-shrink:0}
+.axis-input{flex:1;background:var(--s1);border:1px solid var(--border);border-radius:20px;padding:10px 15px;font-size:16px;max-height:88px;line-height:1.35;transition:border-color .2s}
 .axis-input:focus{border-color:rgba(56,225,255,.5)}
-.axis-send{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary-2));display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .2s}
+.axis-send{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary-2));display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .2s}
 .axis-send[disabled]{opacity:.35}
 .typing{display:flex;gap:4px;padding:14px}
 .typing i{width:6px;height:6px;border-radius:50%;background:var(--primary);animation:blink 1s infinite}
