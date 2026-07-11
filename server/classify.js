@@ -1,7 +1,12 @@
 /* Shared NL → structured-task classifier. Used by /api/tasks/classify (Tasks tab
    quick-add) and by /api/chat when AXIS adds a task conversationally. */
-const { todayStr, todayDow, addDays, dowOf } = require('./db');
 const { completeJson } = require('./brain');
+
+const localDate = () => new Date(Date.now() + 5.5 * 3600e3);
+const todayStr = () => localDate().toISOString().slice(0, 10);
+const todayDow = () => localDate().getUTCDay();
+const addDays = (date, days) => { const d = new Date(date + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
+const dowOf = date => new Date(date + 'T12:00:00Z').getUTCDay();
 
 const DF = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DFS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

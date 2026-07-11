@@ -43,7 +43,12 @@ let C = {
 };
 
 function cacheState() {
-  try { localStorage.setItem('ctrl_v2_cache', JSON.stringify({ profile: C.profile, tasks: C.tasks, arcs: C.arcs, wins: C.wins, loops: C.loops, prefs: C.prefs, blocks: C.blocks, comp: C.comp })); } catch {}
+  try {
+    const state = { profile: C.profile, tasks: C.tasks, arcs: C.arcs, wins: C.wins, loops: C.loops, prefs: C.prefs, blocks: C.blocks, comp: C.comp,
+      planItems: localState().planItems, messages: localState().messages };
+    localStorage.setItem('ctrl_v2_cache', JSON.stringify(state));
+    saveLocalState(state);
+  } catch {}
 }
 function adoptState(st) {
   C.profile = st.profile; C.tasks = st.tasks || []; C.arcs = st.arcs || [];
@@ -63,12 +68,9 @@ function readLegacyState() {
 }
 
 async function boot() {
-  let legacy = null;
-  if (!localStorage.getItem('ctrl_v2_migrated')) legacy = readLegacyState();
   try {
-    const r = legacy ? await api('/sync', 'POST', legacy) : await api('/sync');
+    const r = await api('/sync');
     adoptState(r.state);
-    if (legacy) { localStorage.setItem('ctrl_v2_migrated', '1'); if (r.seeded) toast('Data migrated to server ✓'); }
     C.loaded = true; C.offline = false;
   } catch (e) {
     // offline / server down → run off cache
