@@ -43,12 +43,7 @@ let C = {
 };
 
 function cacheState() {
-  try {
-    const state = { profile: C.profile, tasks: C.tasks, arcs: C.arcs, wins: C.wins, loops: C.loops, prefs: C.prefs, blocks: C.blocks, comp: C.comp,
-      planItems: localState().planItems, messages: localState().messages };
-    localStorage.setItem('ctrl_v2_cache', JSON.stringify(state));
-    saveLocalState(state);
-  } catch {}
+  try { localStorage.setItem('ctrl_v2_cache', JSON.stringify({ profile: C.profile, tasks: C.tasks, arcs: C.arcs, wins: C.wins, loops: C.loops, prefs: C.prefs, blocks: C.blocks, comp: C.comp })); } catch {}
 }
 function adoptState(st) {
   C.profile = st.profile; C.tasks = st.tasks || []; C.arcs = st.arcs || [];
@@ -59,18 +54,35 @@ function adoptState(st) {
 }
 
 /* ── migration from v1 localStorage ── */
-const LEGACY_KEYS = ['ctrl_v8', 'ctrl_v7', 'ctrl_v6', 'ctrl_v5', 'ctrl_v4', 'ctrl_v3', 'ctrl_state'];
+const LEGACY_KEYS = ['ctrl_local_v1', 'ctrl_v2_cache', 'ctrl_v8', 'ctrl_v7', 'ctrl_v6', 'ctrl_v5', 'ctrl_v4', 'ctrl_v3', 'ctrl_state'];
 function readLegacyState() {
   for (const k of LEGACY_KEYS) {
-    try { const raw = localStorage.getItem(k); if (raw) return JSON.parse(raw); } catch {}
+    try {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const S = JSON.parse(raw);
+      if (!S || typeof S !== 'object') continue;
+      // Normalize local-first / cache shape into sync seed payload
+      if (S.comp && !S.counts) S.counts = S.comp;
+      if (Array.isArray(S.completions)) {
+        S.counts = S.counts || {};
+        for (const c of S.completions) {
+          if (c?.task_id && c?.date) S.counts[c.task_id + '_' + c.date] = c.count || 1;
+        }
+      }
+      return S;
+    } catch {}
   }
   return null;
 }
 
 async function boot() {
+  let legacy = null;
+  if (!localStorage.getItem('ctrl_v2_migrated')) legacy = readLegacyState();
   try {
-    const r = await api('/sync');
+    const r = legacy ? await api('/sync', 'POST', legacy) : await api('/sync');
     adoptState(r.state);
+    if (legacy) { localStorage.setItem('ctrl_v2_migrated', '1'); if (r.seeded) toast('Data migrated to server ✓'); }
     C.loaded = true; C.offline = false;
   } catch (e) {
     // offline / server down → run off cache
