@@ -19,6 +19,18 @@ function dropBucketIfStale(ip, b) {
   if (b.fails.length === 0 && Date.now() >= b.blockedUntil) buckets.delete(ip);
 }
 
+function sweepStaleBuckets() {
+  const now = Date.now();
+  for (const [ip, b] of buckets) {
+    pruneFails(b);
+    if (b.fails.length === 0 && now >= b.blockedUntil) buckets.delete(ip);
+  }
+}
+
+/* Drop idle IPs even if they never retry — runs every minute */
+const sweepTimer = setInterval(sweepStaleBuckets, 60 * 1000);
+if (typeof sweepTimer.unref === 'function') sweepTimer.unref();
+
 function blockedResponse(res, blockedUntil) {
   const retrySec = Math.max(1, Math.ceil((blockedUntil - Date.now()) / 1000));
   const mins = Math.ceil(retrySec / 60);
