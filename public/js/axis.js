@@ -266,7 +266,6 @@ const PLAN = {
           const r = await api(`/plan/item/${itemId}`, 'PUT', { start: toHHMM(startMin), end: toHHMM(endMin) });
           Object.assign(it, r.item);
           this.patchBlock(itemId);
-          toast('Moved ✓');
         } catch (err) {
           this.patchBlock(itemId);
           toast(err.message || 'Could not move there');
