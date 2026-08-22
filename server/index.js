@@ -105,7 +105,7 @@ app.use((err, _req, res, _next) => {
 
 const PORT = +process.env.PORT || 8787;
 push.init();
-jobs.start();
+jobs.start(); /* also runs retention once on boot */
 app.listen(PORT, () => {
   console.log(`[server] CTRL listening on http://localhost:${PORT} (rss ${Math.round(process.memoryUsage().rss / 1048576)}MB)`);
 });

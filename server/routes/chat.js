@@ -20,7 +20,7 @@ const DFS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const fmtDur = m => m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}` : m + 'm';
 
 router.get('/', (_req, res) => {
-  res.json({ messages: q.recentMessages(80) });
+  res.json({ messages: q.recentMessages(20) });
 });
 
 function buildContext() {

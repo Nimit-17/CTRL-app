@@ -263,11 +263,42 @@ const q = {
   },
   deleteScheduleItem(id) { db.prepare('DELETE FROM schedule WHERE id=?').run(id); },
 
-  /* messages */
+  /* messages — trimmed to 20 rows after every insert (see retention.js) */
   recentMessages: n => db.prepare('SELECT * FROM messages ORDER BY id DESC LIMIT ?').all(n).reverse(),
+  trimMessages(max) {
+    const before = db.prepare('SELECT COUNT(*) c FROM messages').get().c;
+    if (before <= max) return 0;
+    const r = db.prepare(
+      'DELETE FROM messages WHERE id NOT IN (SELECT id FROM messages ORDER BY id DESC LIMIT ?)'
+    ).run(max);
+    return r.changes;
+  },
   insertMessage(role, content, meta) {
     const r = db.prepare('INSERT INTO messages (role,content,meta) VALUES (?,?,?)').run(role, content, meta ? JSON.stringify(meta) : null);
+    q.trimMessages(20);
     return r.lastInsertRowid;
+  },
+
+  /* retention helpers — never touch profile, arcs, preferences, wins, loops, push_subs */
+  pruneScheduleBefore(today) {
+    return db.prepare('DELETE FROM schedule WHERE date < ?').run(today).changes;
+  },
+  pruneCompletionsBefore(today) {
+    /* profile.xp is stored separately; only today's completions affect live UI ticks */
+    return db.prepare('DELETE FROM completions WHERE date < ?').run(today).changes;
+  },
+  pruneCompletedOneoffs(today) {
+    const rows = db.prepare("SELECT id, dates FROM tasks WHERE kind='oneoff' AND archived=0").all();
+    let n = 0;
+    for (const row of rows) {
+      const dates = JSON.parse(row.dates || '[]');
+      if (!dates.length || dates.some(d => d >= today)) continue;
+      const done = db.prepare('SELECT 1 FROM completions WHERE task_id=? AND count>0 LIMIT 1').get(row.id);
+      if (!done) continue;
+      q.deleteTask(row.id);
+      n++;
+    }
+    return n;
   },
 
   /* push */

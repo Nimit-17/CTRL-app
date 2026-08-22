@@ -5,6 +5,7 @@ const cron = require('node-cron');
 const { q, todayStr, todayDow, TZ } = require('./db');
 const { complete } = require('./brain');
 const { sendToAll } = require('./push');
+const { runRetention } = require('./retention');
 
 function todaysAgenda() {
   const date = todayStr();
@@ -71,7 +72,10 @@ function start() {
   const [eh, em] = evening.split(':');
   cron.schedule(`${+mm} ${+mh} * * *`, morningBriefing, { timezone: TZ });
   cron.schedule(`${+em} ${+eh} * * *`, eveningCheckin, { timezone: TZ });
-  console.log(`[jobs] briefings scheduled ${morning} & ${evening} ${TZ}`);
+  /* 03:00 IST — prune past schedule/completions, completed one-offs, trim messages */
+  cron.schedule('0 3 * * *', () => runRetention(), { timezone: TZ });
+  console.log(`[jobs] briefings scheduled ${morning} & ${evening} ${TZ}; retention daily 03:00 ${TZ}`);
+  runRetention();
 }
 
 module.exports = { start, morningBriefing, eveningCheckin };
