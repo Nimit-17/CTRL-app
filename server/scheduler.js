@@ -205,4 +205,30 @@ function fmt12(hhmm) {
   return m ? `${hr}:${String(m).padStart(2, '0')}${ap}` : `${hr}${ap}`;
 }
 
-module.exports = { planWeek, proposeSlot, toMin, toHHMM, fmt12 };
+/* Validate a manual drag/drop placement (same-day move). */
+function validatePlacement(date, startMin, endMin, excludeItemId) {
+  if (endMin <= startMin) return { ok: false, message: 'Invalid time range' };
+  const dw = (q.getPref('day_window') || '08:00-24:00').split('-').map(toMin);
+  if (startMin < dw[0] || endMin > dw[1]) return { ok: false, message: 'Outside your day window' };
+
+  const today = todayStr();
+  if (date === today) {
+    const ist = nowIST();
+    const nowMin = ist.getHours() * 60 + ist.getMinutes();
+    const floor = Math.min(roundUp(nowMin + GRAN), dw[1]);
+    if (startMin < floor) return { ok: false, message: "Can't move into the past" };
+  }
+
+  const dow = dowOf(date);
+  const dayBlocks = q.allBlocks().filter(b => b.days.includes(dow)).map(b => [toMin(b.start), toMin(b.end)]);
+  const busy = q.scheduleFor(date)
+    .filter(r => r.id !== excludeItemId && r.status !== 'dropped' && r.status !== 'moved')
+    .map(r => [toMin(r.start), toMin(r.end)]);
+
+  for (const [s, e] of [...dayBlocks, ...busy]) {
+    if (startMin < e && endMin > s) return { ok: false, message: 'Overlaps another block' };
+  }
+  return { ok: true };
+}
+
+module.exports = { planWeek, proposeSlot, validatePlacement, toMin, toHHMM, fmt12, GRAN };

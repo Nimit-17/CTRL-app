@@ -1,7 +1,7 @@
 /* /api/plan — generate / fetch / edit the weekly timetable. */
 const express = require('express');
 const { q, todayStr, weekDates } = require('../db');
-const { planWeek, proposeSlot } = require('../scheduler');
+const { planWeek, proposeSlot, validatePlacement, toMin } = require('../scheduler');
 const { complete } = require('../brain');
 
 const router = express.Router();
@@ -51,6 +51,13 @@ router.put('/item/:id', (req, res) => {
   if (b.start && /^\d{2}:\d{2}$/.test(b.start)) patch.start = b.start;
   if (b.end && /^\d{2}:\d{2}$/.test(b.end)) patch.end = b.end;
   if (['pending', 'done', 'moved', 'dropped'].includes(b.status)) patch.status = b.status;
+
+  const next = { ...item, ...patch };
+  if (patch.start || patch.end) {
+    const v = validatePlacement(next.date, toMin(next.start), toMin(next.end), item.id);
+    if (!v.ok) return res.status(409).json({ error: 'invalid_slot', message: v.message });
+  }
+
   q.updateScheduleItem(item.id, patch);
   res.json({ item: q.getScheduleItem(item.id) });
 });

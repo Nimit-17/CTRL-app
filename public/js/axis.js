@@ -123,7 +123,8 @@ const PLAN = {
           <p class="small" style="margin-bottom:4px">Nothing scheduled for ${sel === this.data.today ? 'today' : DF[new Date(sel + 'T12:00:00').getDay()]}</p>
           <p class="xs sub">${hasPlan ? 'A rest day — or add tasks for this day.' : 'Hit "Plan my week" and AXIS will build your timetable.'}</p>
         </div>`
-      : `<div class="au d2 tt-grid" style="height:${H + 20}px;margin-bottom:20px">${hourMarks.join('')}${blocks}${nowLine}</div>`}`;
+      : `<div class="au d2 tt-grid" style="height:${H + 20}px;margin-bottom:20px" data-gs="${gs}" data-ge="${ge}">${hourMarks.join('')}${blocks}${nowLine}</div>
+         <p class="au d2 xs dim" style="text-align:center;margin:-8px 0 16px">Drag planned blocks to reschedule · tap for options</p>`}`;
   },
 
   /* whole week at a glance — 7 columns, tap a column/block to jump into that day */
@@ -176,8 +177,83 @@ const PLAN = {
     document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { this.view = b.dataset.view; localStorage.setItem('ctrl_planview', this.view); render(); });
     document.getElementById('rat-close')?.addEventListener('click', () => { this.rationale = null; render(); });
     document.querySelectorAll('.tt-daychip').forEach(b => b.onclick = () => { this.sel = b.dataset.date; render(); });
-    document.querySelectorAll('.tt-block').forEach(b => b.onclick = () => this.openItemSheet(b.dataset.item));
+    this.bindDayDrag();
     document.querySelectorAll('.wk-col').forEach(b => b.onclick = () => { this.sel = b.dataset.wkday; this.view = 'day'; localStorage.setItem('ctrl_planview', 'day'); render(); });
+  },
+
+  bindDayDrag() {
+    const grid = document.querySelector('.tt-grid');
+    if (!grid || this.view !== 'day') return;
+    const PX = 1.15;
+    const GRAN = 5;
+    const gs = +grid.dataset.gs;
+    const ge = +grid.dataset.ge;
+    const snap = m => Math.round(m / GRAN) * GRAN;
+    const toMin = s => { const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
+    const toHHMM = min => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+    grid.querySelectorAll('.tt-block').forEach(block => {
+      const itemId = block.dataset.item;
+      const isDraggable = block.classList.contains('planned') && !block.classList.contains('done');
+
+      if (!isDraggable) {
+        block.onclick = () => this.openItemSheet(itemId);
+        return;
+      }
+
+      block.style.touchAction = 'none';
+      let startY = 0, startTop = 0, dragging = false, moved = false;
+
+      block.addEventListener('pointerdown', e => {
+        if (e.button !== 0) return;
+        startY = e.clientY;
+        startTop = parseFloat(block.style.top) || 0;
+        dragging = true;
+        moved = false;
+        block.setPointerCapture(e.pointerId);
+      });
+
+      block.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        const dy = e.clientY - startY;
+        if (Math.abs(dy) > 8) moved = true;
+        if (!moved) return;
+        block.classList.add('dragging');
+        const maxTop = (ge - gs) * PX - block.offsetHeight;
+        const newTop = Math.max(0, Math.min(startTop + dy, maxTop));
+        block.style.top = `${newTop}px`;
+      });
+
+      const finish = async e => {
+        if (!dragging) return;
+        dragging = false;
+        block.classList.remove('dragging');
+        try { block.releasePointerCapture(e.pointerId); } catch {}
+
+        if (!moved) {
+          this.openItemSheet(itemId);
+          return;
+        }
+
+        const it = this.data.items.find(x => x.id === itemId);
+        if (!it) { render(); return; }
+        const dur = toMin(it.end) - toMin(it.start);
+        const startMin = snap(gs + parseFloat(block.style.top) / PX);
+        const endMin = startMin + dur;
+
+        try {
+          const r = await api(`/plan/item/${itemId}`, 'PUT', { start: toHHMM(startMin), end: toHHMM(endMin) });
+          Object.assign(it, r.item);
+          toast('Moved ✓');
+        } catch (err) {
+          toast(err.message || 'Could not move there');
+        }
+        render();
+      };
+
+      block.addEventListener('pointerup', finish);
+      block.addEventListener('pointercancel', finish);
+    });
   },
 
   openItemSheet(itemId) {
