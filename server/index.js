@@ -6,18 +6,14 @@ const express = require('express');
 const { q, todayStr } = require('./db');
 const push = require('./push');
 const jobs = require('./jobs');
+const { ownerAuth } = require('./auth');
 
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '2mb' }));
 
-/* optional owner-token gate */
 const TOKEN = (process.env.OWNER_TOKEN || '').trim();
-app.use('/api', (req, res, next) => {
-  if (!TOKEN) return next();
-  if (req.get('X-Owner-Token') === TOKEN) return next();
-  res.status(401).json({ error: 'unauthorized' });
-});
+app.use('/api', ownerAuth(TOKEN));
 
 app.use('/api/sync', require('./routes/sync'));
 app.use('/api/tasks', require('./routes/tasks'));

@@ -73,6 +73,27 @@ const PLAN = {
   },
   _nowMin() { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); },
 
+  patchBlock(itemId) {
+    const it = this.data.items.find(x => x.id === itemId);
+    const block = document.querySelector(`.tt-block[data-item="${itemId}"]`);
+    if (!it || !block) return;
+    const sel = this.sel || this.data.today;
+    const dayItems = this.data.items.filter(i => i.date === sel && i.status !== 'moved' && i.status !== 'dropped');
+    const { toMin, gs } = this._bounds(dayItems.length ? dayItems : [it]);
+    const PX = 1.15;
+    const top = (toMin(it.start) - gs) * PX;
+    const h = Math.max((toMin(it.end) - toMin(it.start)) * PX, 20);
+    block.style.top = `${top}px`;
+    block.style.height = `${h}px`;
+    block.classList.toggle('short', h < 34);
+    const t = this.data.tasks.find(x => x.id === it.task_id);
+    const timeEl = block.querySelector('.bl-time');
+    if (timeEl) timeEl.textContent = `${fmtT(it.start)}–${fmtT(it.end)}${t ? ` · ${fmtM(t.minutes)}` : ''}`;
+    block.classList.toggle('done', it.status === 'done');
+    const nameEl = block.querySelector('.bl-name');
+    if (nameEl && t) nameEl.textContent = `${it.status === 'done' ? '✓ ' : ''}${t.name}`;
+  },
+
   renderDay(sel, hasPlan) {
     const { items, tasks, arcs } = this.data;
     const byId = Object.fromEntries(tasks.map(t => [t.id, t]));
@@ -236,7 +257,7 @@ const PLAN = {
         }
 
         const it = this.data.items.find(x => x.id === itemId);
-        if (!it) { render(); return; }
+        if (!it) return;
         const dur = toMin(it.end) - toMin(it.start);
         const startMin = snap(gs + parseFloat(block.style.top) / PX);
         const endMin = startMin + dur;
@@ -244,11 +265,12 @@ const PLAN = {
         try {
           const r = await api(`/plan/item/${itemId}`, 'PUT', { start: toHHMM(startMin), end: toHHMM(endMin) });
           Object.assign(it, r.item);
+          this.patchBlock(itemId);
           toast('Moved ✓');
         } catch (err) {
+          this.patchBlock(itemId);
           toast(err.message || 'Could not move there');
         }
-        render();
       };
 
       block.addEventListener('pointerup', finish);
@@ -261,12 +283,21 @@ const PLAN = {
     if (!it) return;
     const t = this.data.tasks.find(x => x.id === it.task_id);
     const isFixed = it.source === 'fixed';
+    let editMin = t ? (t.minutes || 30) : 30;
+    let editPrio = t ? (t.priority || 3) : 3;
     openSheet(`
       <div class="hud-label" style="margin-bottom:4px">${isFixed ? 'Fixed block' : 'Scheduled task'}</div>
       <div class="h2" style="margin-bottom:14px">${esc(t ? t.name : it.label)}</div>
       <div class="ac-kv"><span class="k">When</span><span class="v">${DF[new Date(it.date + 'T12:00:00').getDay()]} ${it.date.slice(5)} · ${fmtT(it.start)}–${fmtT(it.end)}</span></div>
-      ${t ? `<div class="ac-kv"><span class="k">Duration</span><span class="v">${fmtM(t.minutes)}</span></div>
-             <div class="ac-kv"><span class="k">Priority</span><span class="v">P${t.priority || 3}</span></div>` : ''}
+      ${t ? `<div style="margin-top:14px">
+        <span class="xs sub" style="display:block;margin-bottom:8px">Duration</span>
+        <div class="chip-row" id="it-min-presets">${[15, 30, 45, 60, 90, 120].map(v => `<button type="button" class="press chip it-min${editMin === v ? ' on' : ''}" data-min="${v}">${fmtM(v)}</button>`).join('')}</div>
+      </div>
+      <div style="margin-top:12px">
+        <span class="xs sub" style="display:block;margin-bottom:8px">Priority</span>
+        <div class="chip-row" id="it-prio">${[1, 2, 3, 4, 5].map(p => `<button type="button" class="press chip it-p${editPrio === p ? ' on' : ''}" data-p="${p}">P${p}</button>`).join('')}</div>
+      </div>
+      <button type="button" id="it-save-meta" class="press ac-btn cyan" style="width:100%;margin-top:14px">Save duration & priority</button>` : ''}
       ${isFixed
         ? `<p class="xs dim" style="margin-top:14px">Fixed blocks are immovable — edit them in More → Settings.</p>`
         : `<div class="ac-row" style="margin-top:16px">
@@ -277,6 +308,34 @@ const PLAN = {
           <div id="it-proposal"></div>`}
     `, () => {
       if (isFixed) return;
+      document.querySelectorAll('.it-min').forEach(b => b.onclick = () => {
+        editMin = +b.dataset.min;
+        document.querySelectorAll('.it-min').forEach(x => x.classList.toggle('on', +x.dataset.min === editMin));
+      });
+      document.querySelectorAll('.it-p').forEach(b => b.onclick = () => {
+        editPrio = +b.dataset.p;
+        document.querySelectorAll('.it-p').forEach(x => x.classList.toggle('on', +x.dataset.p === editPrio));
+      });
+      document.getElementById('it-save-meta')?.addEventListener('click', async () => {
+        if (!t) return;
+        editMin = Math.max(5, Math.min(480, editMin));
+        editPrio = Math.max(1, Math.min(5, editPrio));
+        try {
+          const tr = await api(`/tasks/${t.id}`, 'PUT', { minutes: editMin, priority: editPrio });
+          Object.assign(t, tr.task);
+          const ct = C.tasks.find(x => x.id === t.id);
+          if (ct) { ct.minutes = editMin; ct.priority = editPrio; cacheState(); }
+          const toMin = s => { const [h, m] = s.split(':').map(Number); return h * 60 + (m || 0); };
+          const toHHMM = min => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+          const startMin = toMin(it.start);
+          const endMin = startMin + editMin;
+          const pr = await api(`/plan/item/${it.id}`, 'PUT', { start: it.start, end: toHHMM(endMin) });
+          Object.assign(it, pr.item);
+          this.patchBlock(it.id);
+          closeSheet();
+          toast('Updated ✓');
+        } catch (e) { toast(e.message || 'Could not save'); }
+      });
       document.getElementById('it-done').onclick = async () => {
         const newStatus = it.status === 'done' ? 'pending' : 'done';
         try {
@@ -286,12 +345,20 @@ const PLAN = {
             await api(`/tasks/${t.id}/complete`, 'POST', { date: it.date, count: cnt });
             C.comp[`${t.id}_${it.date}`] = cnt; cacheState();
           }
-          it.status = newStatus; closeSheet(); render();
+          it.status = newStatus;
+          this.patchBlock(it.id);
+          closeSheet();
+          toast(newStatus === 'done' ? 'Done ✓' : 'Undone');
         } catch (e) { toast(e.message); }
       };
       document.getElementById('it-drop').onclick = async () => {
-        try { await api(`/plan/item/${it.id}`, 'PUT', { status: 'dropped' }); it.status = 'dropped'; closeSheet(); render(); toast('Dropped'); }
-        catch (e) { toast(e.message); }
+        try {
+          await api(`/plan/item/${it.id}`, 'PUT', { status: 'dropped' });
+          it.status = 'dropped';
+          closeSheet();
+          render();
+          toast('Dropped');
+        } catch (e) { toast(e.message); }
       };
       document.getElementById('it-move').onclick = async () => {
         const box = document.getElementById('it-proposal');
@@ -313,7 +380,10 @@ const PLAN = {
           document.getElementById('it-confirm').onclick = async () => {
             try {
               await api(`/plan/item/${it.id}`, 'PUT', { date: slot.date, start: slot.start, end: slot.end, status: 'pending' });
-              Object.assign(it, slot); closeSheet(); render(); toast('Moved ✓');
+              Object.assign(it, slot);
+              closeSheet();
+              this.patchBlock(it.id);
+              toast('Moved ✓');
             } catch (e) { toast(e.message); }
           };
         } catch (e) { box.innerHTML = `<p class="xs" style="margin-top:14px;color:var(--danger)">${esc(e.message)}</p>`; }

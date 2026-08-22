@@ -1,5 +1,5 @@
 /* CTRL service worker — offline shell + web push. */
-const CACHE = 'ctrl-shell-v5';
+const CACHE = 'ctrl-shell-v6';
 const SHELL = [
   '/', '/index.html',
   '/css/tokens.css', '/css/app.css',
