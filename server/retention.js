@@ -19,8 +19,8 @@ function runRetention() {
   try { report.messages = q.trimMessages(MESSAGES_MAX); } catch (e) {
     console.warn('[retention] trimMessages:', e.message);
   }
-  try { report.schedule = q.pruneScheduleBefore(today); } catch (e) {
-    console.warn('[retention] pruneScheduleBefore:', e.message);
+  try { report.schedule = q.prunePastWeekSchedule(); } catch (e) {
+    console.warn('[retention] prunePastWeekSchedule:', e.message);
   }
   try { report.completions = q.pruneCompletionsBefore(today); } catch (e) {
     console.warn('[retention] pruneCompletionsBefore:', e.message);

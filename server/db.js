@@ -143,6 +143,12 @@ function weekDates() {
   const t = todayStr();
   return Array.from({ length: 7 }, (_, i) => addDays(t, i));
 }
+/* Calendar week start (Monday) — schedule retention keeps this week only */
+function weekStartStr() {
+  const dow = todayDow(); // 0=Sun .. 6=Sat
+  const back = dow === 0 ? 6 : dow - 1;
+  return addDays(todayStr(), -back);
+}
 
 /* ── row (de)serializers ── */
 function parseTask(r) {
@@ -280,8 +286,9 @@ const q = {
   },
 
   /* retention helpers — never touch profile, arcs, preferences, wins, loops, push_subs */
-  pruneScheduleBefore(today) {
-    return db.prepare('DELETE FROM schedule WHERE date < ?').run(today).changes;
+  prunePastWeekSchedule() {
+    const start = weekStartStr();
+    return db.prepare('DELETE FROM schedule WHERE date < ?').run(start).changes;
   },
   pruneCompletionsBefore(today) {
     /* profile.xp is stored separately; only today's completions affect live UI ticks */
@@ -309,4 +316,4 @@ const q = {
   isEmpty: () => !db.prepare('SELECT 1 FROM profile WHERE id=1').get() && db.prepare('SELECT COUNT(*) c FROM tasks').get().c === 0,
 };
 
-module.exports = { db, q, todayStr, todayDow, addDays, dowOf, weekDates, dateToStr, nowIST, TZ };
+module.exports = { db, q, todayStr, todayDow, addDays, dowOf, weekDates, weekStartStr, dateToStr, nowIST, TZ };
